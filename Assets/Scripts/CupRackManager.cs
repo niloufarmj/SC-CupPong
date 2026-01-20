@@ -4,87 +4,75 @@ using System.Collections.Generic;
 public class CupRackManager : MonoBehaviour
 {
     [Header("Settings")]
-    [Tooltip("Drag your Red Cup Prefab here")]
     public GameObject cupPrefab;
-
-    [Tooltip("Distance between the center of two adjacent cups relative to cup scale (usually slightly larger than 1.0)")]
     public float cupSpacingRatio = 1.05f;
 
     [Header("Debug")]
     [Range(0, 6)]
-    [Tooltip("Change this slider in Play Mode to test different racks")]
-    public int testCupCount = 6;
+    public int currentCupCount = 6; // Renamed from testCupCount for clarity
 
-    // Internal storage for active cups
     private List<GameObject> activeCups = new List<GameObject>();
-    // Dictionary to store layout positions: Key = cup count, Value = list of positions
     private Dictionary<int, List<Vector3>> layouts = new Dictionary<int, List<Vector3>>();
-    // To track current state
-    private int currentLoadedCount = -1;
 
     void Start()
     {
-        // 1. Define layouts on start based on spacing
         DefineLayouts();
-
-        // 2. Initial setup (optional, for testing)
-        SetupRack(testCupCount);
+        // Start the game with 6 cups (or whatever is set in Inspector)
+        SetupRack(currentCupCount);
     }
 
-    // Update loop just for easy debugging in the Editor
-    void Update()
+    // --- NEW FUNCTION: Called by CupSensor.cs ---
+    public void OnCupHit()
     {
-        // If you change the slider in the inspector while playing, update the rack
-        if (currentLoadedCount != testCupCount)
+        // 1. Decrease Count
+        currentCupCount--;
+
+        // 2. Check Game Over
+        if (currentCupCount <= 0)
         {
-            SetupRack(testCupCount);
+            Debug.Log("GAME OVER! YOU WIN!");
+            ClearCups();
+            // Optional: You could call a function here to restart the game later
+            return;
         }
+
+        // 3. Re-Rack (Re-construct layout)
+        // This destroys old cups and spawns new ones in the new formation
+        SetupRack(currentCupCount);
     }
 
-    /// <summary>
-    /// Main function to call to generate a specific rack formation.
-    /// </summary>
-    /// <param name="count">Number of cups (1, 2, 3, 4, or 6)</param>
     public void SetupRack(int count)
     {
-        // Handle invalid or 0 inputs
         if (count <= 0 || !layouts.ContainsKey(count))
         {
             ClearCups();
-            currentLoadedCount = 0;
             return;
         }
 
         ClearCups();
         SpawnCups(count);
-        currentLoadedCount = count;
-        // Update debug slider to match reality
-        testCupCount = count;
+        currentCupCount = count; // Ensure internal tracking matches
     }
 
     private void ClearCups()
     {
         foreach (GameObject cup in activeCups)
         {
-            Destroy(cup);
+            if (cup != null) Destroy(cup);
         }
         activeCups.Clear();
     }
 
     private void SpawnCups(int count)
     {
-        // Retrieve the predefined positions list for this count
         List<Vector3> positions = layouts[count];
 
         foreach (Vector3 localPos in positions)
         {
-            // Instantiate cup as a child of this rack object
             GameObject newCup = Instantiate(cupPrefab, transform);
-            // Set its local position based on the layout definition
             newCup.transform.localPosition = localPos;
-            // Ensure rotation is standard
+            // Ensure standard rotation
             newCup.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-            
             activeCups.Add(newCup);
         }
     }

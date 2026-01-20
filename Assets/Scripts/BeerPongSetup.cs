@@ -6,56 +6,112 @@ public class BeerPongSetup : MonoBehaviour
     [Header("Prefabs")]
     public GameObject cupRackPrefab;
     public GameObject ballPrefab;
-    public GameObject ballCorralPrefab; // *** NEW SLOT for the invisible walls ***
+    public GameObject ballCorralPrefab; // (Optional: Keep your Phase 11 corral if you want)
 
     [Header("Settings")]
     public float tableEdgeOffset = 0.3f;
     public float surfaceHeightOffset = 0.02f;
     public bool useRaycastPlacement = true;
 
+    [Header("Boundary Settings")]
+    public float wallHeight = 1.0f; // 1 meter tall invisible walls
+
     public void InitializeGameOnTable(MRUKAnchor selectedTable)
     {
-        // 1. Calculate Positions (Same as before)
+        // 1. Get Table Data
         Rect planeRect = selectedTable.PlaneRect.HasValue ? selectedTable.PlaneRect.Value : new Rect(0,0,1,1);
         Vector2 tableSize = planeRect.size;
         
+        // Determine orientation
         bool isWide = tableSize.x > tableSize.y;
         float longDimension = isWide ? tableSize.x : tableSize.y;
+        float shortDimension = isWide ? tableSize.y : tableSize.x;
         float offsetDistance = (longDimension / 2) - tableEdgeOffset;
 
+        // Calculate positions
         Vector3 localPosCup = isWide ? new Vector3(offsetDistance, 0, 0) : new Vector3(0, offsetDistance, 0);
         Vector3 localPosBall = isWide ? new Vector3(-offsetDistance, 0, 0) : new Vector3(0, -offsetDistance, 0);
 
-        // 2. Spawn Items
+        // 2. Spawn Game Items
         SpawnGameObjects(selectedTable, localPosCup, localPosBall);
+
+        // 3. Spawn Invisible Boundaries (The 3 Walls)
+        SpawnBoundaries(selectedTable, tableSize, isWide);
     }
 
     void SpawnGameObjects(MRUKAnchor table, Vector3 cupLocalPos, Vector3 ballLocalPos)
     {
-        // --- Spawn Rack ---
+        // --- Rack ---
         GameObject rack = Instantiate(cupRackPrefab);
         rack.transform.SetParent(table.transform, false);
         float cupHeight = useRaycastPlacement ? GetSurfaceHeight(table, cupLocalPos) : 0.07f;
-        rack.transform.localPosition = new Vector3(cupLocalPos.x, cupLocalPos.y, cupHeight);
-        rack.transform.localRotation = Quaternion.Euler(0, 90, 90);
+        rack.transform.localPosition = new Vector3(cupLocalPos.x, cupLocalPos.y, cupHeight + 0.05f);
+        rack.transform.localRotation = Quaternion.Euler(0, 90, 90); // Adjust manually if needed via Inspector later
 
-        // --- Spawn Ball ---
+        // --- Ball ---
         GameObject ball = Instantiate(ballPrefab);
         ball.transform.SetParent(table.transform, false);
         float ballHeight = useRaycastPlacement ? GetSurfaceHeight(table, ballLocalPos) + 0.05f : 0.1f;
         ball.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight);
-
-        // --- SPAWN INVISIBLE CORRAL ---
+        
+        // --- Corral (Startup Stability) ---
         if (ballCorralPrefab != null)
         {
             GameObject corral = Instantiate(ballCorralPrefab);
             corral.transform.SetParent(table.transform, false);
-            // Place at same position as ball, but slightly lower so walls sit ON table
             corral.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight - 0.02f);
             corral.transform.localRotation = Quaternion.Euler(90, 0, 0);
-            // Optional: Destroy the walls after 15 seconds so they don't block the game forever
-            // Destroy(corral, 15f); 
         }
+    }
+
+    void SpawnBoundaries(MRUKAnchor table, Vector2 size, bool isWide)
+    {
+        // Create a parent for cleanliness
+        GameObject boundaryParent = new GameObject("InvisibleBoundaries");
+        boundaryParent.transform.SetParent(table.transform, false);
+        boundaryParent.transform.localPosition = Vector3.zero;
+        boundaryParent.transform.localRotation = Quaternion.identity;
+
+        // We need 3 walls. 
+        // Logic: Player is always at negative axis (-offsetDistance). 
+        // So we need walls at: Positive Axis (Far), Positive Cross-Axis (Side), Negative Cross-Axis (Side).
+
+        if (isWide) // X is the long axis (Player at -X, Enemy at +X)
+        {
+            // 1. Far Wall (+X edge)
+            CreateOneWall(boundaryParent, new Vector3(size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
+            // 2. Left Wall (+Y edge)
+            CreateOneWall(boundaryParent, new Vector3(0, size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
+            // 3. Right Wall (-Y edge)
+            CreateOneWall(boundaryParent, new Vector3(0, -size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
+        }
+        else // Y is the long axis (Player at -Y, Enemy at +Y)
+        {
+            // 1. Far Wall (+Y edge)
+            CreateOneWall(boundaryParent, new Vector3(0, size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
+            // 2. Left Wall (+X edge)
+            CreateOneWall(boundaryParent, new Vector3(size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
+            // 3. Right Wall (-X edge)
+            CreateOneWall(boundaryParent, new Vector3(-size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
+        }
+    }
+
+    void CreateOneWall(GameObject parent, Vector3 localPos, Vector3 localScale)
+    {
+        GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        wall.transform.SetParent(parent.transform, false);
+        wall.transform.localPosition = localPos;
+        wall.transform.localScale = localScale;
+
+        // Make Invisible
+        Destroy(wall.GetComponent<MeshRenderer>());
+
+        // Make Trigger
+        BoxCollider bc = wall.GetComponent<BoxCollider>();
+        bc.isTrigger = true;
+
+        // Add Logic
+        wall.AddComponent<BoundaryWall>();
     }
 
     float GetSurfaceHeight(MRUKAnchor table, Vector3 localPos)
