@@ -6,18 +6,16 @@ public class BeerPongSetup : MonoBehaviour
     [Header("Prefabs")]
     public GameObject cupRackPrefab;
     public GameObject ballPrefab;
+    public GameObject ballCorralPrefab; // *** NEW SLOT for the invisible walls ***
 
     [Header("Settings")]
     public float tableEdgeOffset = 0.3f;
-
-    // We remove Start() and OnRoomLoaded() automatic logic.
-    // Instead, we wait for this function to be called:
+    public float surfaceHeightOffset = 0.02f;
+    public bool useRaycastPlacement = true;
 
     public void InitializeGameOnTable(MRUKAnchor selectedTable)
     {
-        Debug.Log($"Initializing game on table: {selectedTable.name}");
-
-        // 1. Calculate Geometry (Reuse logic from before)
+        // 1. Calculate Positions (Same as before)
         Rect planeRect = selectedTable.PlaneRect.HasValue ? selectedTable.PlaneRect.Value : new Rect(0,0,1,1);
         Vector2 tableSize = planeRect.size;
         
@@ -30,27 +28,43 @@ public class BeerPongSetup : MonoBehaviour
 
         // 2. Spawn Items
         SpawnGameObjects(selectedTable, localPosCup, localPosBall);
-        
-        // 3. Disable the selector so we don't accidentally spawn game 2
-        // (Optional) gameObject.SetActive(false); 
     }
 
     void SpawnGameObjects(MRUKAnchor table, Vector3 cupLocalPos, Vector3 ballLocalPos)
     {
-        // --- Spawn Cup Rack ---
+        // --- Spawn Rack ---
         GameObject rack = Instantiate(cupRackPrefab);
         rack.transform.SetParent(table.transform, false);
-        
-        // FIX: Change Z from 0 to 0.07f (lifts the rack up by ~7cm)
-        // Adjust "0.07f" until the cups sit perfectly on the surface.
-        rack.transform.localPosition = new Vector3(cupLocalPos.x, cupLocalPos.y, 0.07f);
-
-        // Keep your working rotation
+        float cupHeight = useRaycastPlacement ? GetSurfaceHeight(table, cupLocalPos) : 0.07f;
+        rack.transform.localPosition = new Vector3(cupLocalPos.x, cupLocalPos.y, cupHeight);
         rack.transform.localRotation = Quaternion.Euler(0, 90, 90);
 
         // --- Spawn Ball ---
         GameObject ball = Instantiate(ballPrefab);
         ball.transform.SetParent(table.transform, false);
-        ball.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, 0.1f);
+        float ballHeight = useRaycastPlacement ? GetSurfaceHeight(table, ballLocalPos) + 0.05f : 0.1f;
+        ball.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight);
+
+        // --- SPAWN INVISIBLE CORRAL ---
+        if (ballCorralPrefab != null)
+        {
+            GameObject corral = Instantiate(ballCorralPrefab);
+            corral.transform.SetParent(table.transform, false);
+            // Place at same position as ball, but slightly lower so walls sit ON table
+            corral.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight - 0.02f);
+            corral.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            // Optional: Destroy the walls after 15 seconds so they don't block the game forever
+            // Destroy(corral, 15f); 
+        }
+    }
+
+    float GetSurfaceHeight(MRUKAnchor table, Vector3 localPos)
+    {
+        Vector3 worldPos = table.transform.TransformPoint(localPos);
+        Vector3 rayStart = worldPos + Vector3.up * 0.5f;
+        Ray ray = new Ray(rayStart, Vector3.down);
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, 1.0f)) return table.transform.InverseTransformPoint(hit.point).z + surfaceHeightOffset;
+        return 0.07f;
     }
 }
