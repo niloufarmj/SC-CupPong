@@ -18,9 +18,14 @@ public class CupSensor : MonoBehaviour
             hasScored = true;
             Debug.Log("GOAL! Ball landed in cup.");
 
-            // 1. Tell the Rack Manager to update game state
-            // The Sensor is a child of the Cup, which is a child of the Rack.
-            // So we search up the hierarchy.
+            // 1. UPDATE SCORE FIRST (Fixes the bug)
+            // We count the hit BEFORE checking if the game is over.
+            if (ScoreBoard.Instance != null)
+            {
+                 ScoreBoard.Instance.AddHit();
+            }
+
+            // 2. Then Tell the Rack Manager (which might trigger Game Over)
             CupRackManager rackManager = GetComponentInParent<CupRackManager>();
             
             if (rackManager != null)
@@ -32,8 +37,10 @@ public class CupSensor : MonoBehaviour
                 Debug.LogError("Could not find CupRackManager in parents!");
             }
 
-            // 2. Reset the Ball
-            ball.ResetBall();
+            // 3. Reset the Ball (Pass TRUE so it doesn't count as a miss)
+            // Note: If the game ends, the ball might be destroyed by RackManager, 
+            // but calling this here is safe as it will just be ignored if destroyed.
+            ball.ResetBall(true);
         }
     }
 }

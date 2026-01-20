@@ -17,10 +17,32 @@ public class BallGameMechanics : MonoBehaviour
     }
 
     // Called by boundaries or floor to reset the ball
-    public void ResetBall()
+    // Modified ResetBall to accept a "Goal" flag
+    public void ResetBall(bool isGoal = false)
     {
-        if (isReseting) return; // Prevent double resets
+        if (isReseting) return;
+        
+        // *** LOGIC UPDATE ***
+        if (ScoreBoard.Instance != null)
+        {
+            if (!isGoal) 
+            {
+                // If it wasn't a goal, it must be a miss (floor/wall hit)
+                ScoreBoard.Instance.AddMiss();
+            }
+        }
+
         StartCoroutine(ResetRoutine());
+    }
+
+    // Floor/Wall Detection (MISS)
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.name.ToUpper().Contains("FLOOR"))
+        {
+            // Call reset with isGoal = false
+            ResetBall(false);
+        }
     }
 
     private IEnumerator ResetRoutine()
@@ -41,15 +63,5 @@ public class BallGameMechanics : MonoBehaviour
         // 4. Unfreeze (Ready to play)
         rb.isKinematic = false;
         isReseting = false;
-    }
-
-    // Floor Detection: If we hit anything labeled "FLOOR" or simply go too low
-    void OnCollisionEnter(Collision collision)
-    {
-        // Check for Floor by name (from ForceSceneLoad) or just raw height
-        if (collision.gameObject.name.ToUpper().Contains("FLOOR"))
-        {
-            ResetBall();
-        }
     }
 }

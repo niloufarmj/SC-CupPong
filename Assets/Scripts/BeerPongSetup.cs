@@ -6,7 +6,8 @@ public class BeerPongSetup : MonoBehaviour
     [Header("Prefabs")]
     public GameObject cupRackPrefab;
     public GameObject ballPrefab;
-    public GameObject ballCorralPrefab; // (Optional: Keep your Phase 11 corral if you want)
+    public GameObject ballCorralPrefab;
+    public GameObject scoreBoardPrefab;
 
     [Header("Settings")]
     public float tableEdgeOffset = 0.3f;
@@ -62,6 +63,37 @@ public class BeerPongSetup : MonoBehaviour
             corral.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight - 0.02f);
             corral.transform.localRotation = Quaternion.Euler(90, 0, 0);
         }
+
+        // 4. *** SPAWN SCOREBOARD ***
+        if (scoreBoardPrefab != null)
+        {
+            GameObject board = Instantiate(scoreBoardPrefab);
+            board.transform.SetParent(table.transform, false);
+            
+            // MATH: Place it 20cm BEHIND the cups and 30cm UP
+            // Since cups are at 'cupLocalPos', we extend further along the long axis.
+            
+            // Calculate direction from Ball to Cup (Gameplay direction)
+            Vector3 direction = (cupLocalPos - ballLocalPos).normalized;
+            
+            // Position = CupPos + (Direction * 0.25m) + Up * 0.3m
+            Vector3 boardPos = cupLocalPos + (direction * 0.25f) + new Vector3(0, 0, 0.3f);
+            
+            board.transform.localPosition = boardPos;
+            
+            // ROTATION: It needs to face the player (Ball position)
+            // LookAt makes Z point to target, but UI text looks down Z-negative usually.
+            // Simplest VR Text trick: Look at the opposite direction of the player
+            // OR simpler: Just match the Rack's rotation but make it stand up vertically
+            
+            // If Rack is rotated (0, 90, 90), Board should effectively face the ball.
+            // Let's force it to look at the ball spawn point
+            Vector3 lookTarget = table.transform.TransformPoint(ballLocalPos);
+            board.transform.LookAt(lookTarget);
+            // LookAt often flips UI backwards, if so, rotate 180 on Y:
+            board.transform.Rotate(0, 180, 0); 
+        }
+    
     }
 
     void SpawnBoundaries(MRUKAnchor table, Vector2 size, bool isWide)

@@ -27,17 +27,32 @@ public class CupRackManager : MonoBehaviour
         // 1. Decrease Count
         currentCupCount--;
 
-        // 2. Check Game Over
+        // 2. Check Game Over (WIN STATE)
         if (currentCupCount <= 0)
         {
             Debug.Log("GAME OVER! YOU WIN!");
+            
+            // A. Clear remaining cups (just in case)
             ClearCups();
-            // Optional: You could call a function here to restart the game later
-            return;
+
+            // B. Show Win Message
+            if (ScoreBoard.Instance != null)
+            {
+                ScoreBoard.Instance.ShowWinMessage();
+            }
+
+            // C. Remove the Ball (So you can't throw anymore)
+            // We find the ball script and destroy the whole game object
+            BallGameMechanics ball = FindObjectOfType<BallGameMechanics>();
+            if (ball != null)
+            {
+                Destroy(ball.gameObject);
+            }
+
+            return; // Stop here, don't re-rack
         }
 
-        // 3. Re-Rack (Re-construct layout)
-        // This destroys old cups and spawns new ones in the new formation
+        // 3. Re-Rack (Normal Gameplay)
         SetupRack(currentCupCount);
     }
 
