@@ -18,6 +18,9 @@ public class CupSensor : MonoBehaviour
             hasScored = true;
             Debug.Log("GOAL! Ball landed in cup.");
 
+            if (GameAudioManager.Instance != null)
+                GameAudioManager.Instance.PlaySound(GameAudioManager.Instance.scoreClip, transform.position);
+
             // 1. UPDATE SCORE FIRST (Fixes the bug)
             // We count the hit BEFORE checking if the game is over.
             if (ScoreBoard.Instance != null)

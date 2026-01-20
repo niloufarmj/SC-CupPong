@@ -31,6 +31,8 @@ public class CupRackManager : MonoBehaviour
         if (currentCupCount <= 0)
         {
             Debug.Log("GAME OVER! YOU WIN!");
+            if (GameAudioManager.Instance != null)
+                GameAudioManager.Instance.PlaySound(GameAudioManager.Instance.winClip, transform.position);
             
             // A. Clear remaining cups (just in case)
             ClearCups();

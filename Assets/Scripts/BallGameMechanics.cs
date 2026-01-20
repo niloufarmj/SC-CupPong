@@ -29,6 +29,8 @@ public class BallGameMechanics : MonoBehaviour
             {
                 // If it wasn't a goal, it must be a miss (floor/wall hit)
                 ScoreBoard.Instance.AddMiss();
+                if (GameAudioManager.Instance != null)
+                GameAudioManager.Instance.PlaySound(GameAudioManager.Instance.missClip, transform.position);
             }
         }
 
@@ -42,6 +44,14 @@ public class BallGameMechanics : MonoBehaviour
         {
             // Call reset with isGoal = false
             ResetBall(false);
+        }
+
+        // Check if we hit the table (or anything hard) and have enough speed
+        // collision.relativeVelocity.magnitude > 0.5f prevents spamming sound when rolling
+        if (GameAudioManager.Instance != null && collision.relativeVelocity.magnitude > 0.5f)
+        {
+            // You can check for "TABLE" specifically, or just play bounce on any non-floor object
+            GameAudioManager.Instance.PlaySound(GameAudioManager.Instance.bounceClip, transform.position, 0.8f);
         }
     }
 

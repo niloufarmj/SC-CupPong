@@ -15,29 +15,54 @@ public class BeerPongSetup : MonoBehaviour
     public bool useRaycastPlacement = true;
 
     [Header("Boundary Settings")]
-    public float wallHeight = 1.0f; // 1 meter tall invisible walls
+    public float wallHeight = 1.0f; 
 
     public void InitializeGameOnTable(MRUKAnchor selectedTable)
     {
-        // 1. Get Table Data
+        // 1. VISUAL CLEANUP: Hide all other room meshes (pink walls, etc.)
+        // We do this BEFORE spawning game items so we don't accidentally hide the game itself.
+        HideOtherDebugSurfaces(selectedTable);
+
+        // 2. Calculate Geometry
         Rect planeRect = selectedTable.PlaneRect.HasValue ? selectedTable.PlaneRect.Value : new Rect(0,0,1,1);
         Vector2 tableSize = planeRect.size;
         
-        // Determine orientation
         bool isWide = tableSize.x > tableSize.y;
         float longDimension = isWide ? tableSize.x : tableSize.y;
-        float shortDimension = isWide ? tableSize.y : tableSize.x;
         float offsetDistance = (longDimension / 2) - tableEdgeOffset;
 
-        // Calculate positions
         Vector3 localPosCup = isWide ? new Vector3(offsetDistance, 0, 0) : new Vector3(0, offsetDistance, 0);
         Vector3 localPosBall = isWide ? new Vector3(-offsetDistance, 0, 0) : new Vector3(0, -offsetDistance, 0);
 
-        // 2. Spawn Game Items
+        if (GameAudioManager.Instance != null)
+            GameAudioManager.Instance.PlaySound(GameAudioManager.Instance.gameStartClip, selectedTable.transform.position);
+
+        // 3. Spawn Game Items
         SpawnGameObjects(selectedTable, localPosCup, localPosBall);
 
-        // 3. Spawn Invisible Boundaries (The 3 Walls)
+        // 4. Spawn Invisible Boundaries
         SpawnBoundaries(selectedTable, tableSize, isWide);
+    }
+
+    // *** NEW FUNCTION: Visual Cleanup ***
+    void HideOtherDebugSurfaces(MRUKAnchor selectedTable)
+    {
+        if (MRUK.Instance == null) return;
+        var room = MRUK.Instance.GetCurrentRoom();
+        if (room == null) return;
+
+        foreach (var anchor in room.Anchors)
+        {
+            // Skip the active game table (keep it visible as the "Stage")
+            if (anchor == selectedTable) continue;
+
+            // Find and disable the mesh renderers (the colored debug cubes)
+            // We use GetComponentsInChildren because ForceSceneLoad adds the visual as a child
+            foreach (var renderer in anchor.GetComponentsInChildren<MeshRenderer>())
+            {
+                renderer.enabled = false;
+            }
+        }
     }
 
     void SpawnGameObjects(MRUKAnchor table, Vector3 cupLocalPos, Vector3 ballLocalPos)
@@ -47,7 +72,7 @@ public class BeerPongSetup : MonoBehaviour
         rack.transform.SetParent(table.transform, false);
         float cupHeight = useRaycastPlacement ? GetSurfaceHeight(table, cupLocalPos) : 0.07f;
         rack.transform.localPosition = new Vector3(cupLocalPos.x, cupLocalPos.y, cupHeight + 0.05f);
-        rack.transform.localRotation = Quaternion.Euler(0, 90, 90); // Adjust manually if needed via Inspector later
+        rack.transform.localRotation = Quaternion.Euler(0, 90, 90); 
 
         // --- Ball ---
         GameObject ball = Instantiate(ballPrefab);
@@ -55,7 +80,7 @@ public class BeerPongSetup : MonoBehaviour
         float ballHeight = useRaycastPlacement ? GetSurfaceHeight(table, ballLocalPos) + 0.05f : 0.1f;
         ball.transform.localPosition = new Vector3(ballLocalPos.x, ballLocalPos.y, ballHeight);
         
-        // --- Corral (Startup Stability) ---
+        // --- Corral ---
         if (ballCorralPrefab != null)
         {
             GameObject corral = Instantiate(ballCorralPrefab);
@@ -64,66 +89,40 @@ public class BeerPongSetup : MonoBehaviour
             corral.transform.localRotation = Quaternion.Euler(90, 0, 0);
         }
 
-        // 4. *** SPAWN SCOREBOARD ***
+        // --- Scoreboard ---
         if (scoreBoardPrefab != null)
         {
             GameObject board = Instantiate(scoreBoardPrefab);
             board.transform.SetParent(table.transform, false);
             
-            // MATH: Place it 20cm BEHIND the cups and 30cm UP
-            // Since cups are at 'cupLocalPos', we extend further along the long axis.
-            
-            // Calculate direction from Ball to Cup (Gameplay direction)
             Vector3 direction = (cupLocalPos - ballLocalPos).normalized;
-            
-            // Position = CupPos + (Direction * 0.25m) + Up * 0.3m
             Vector3 boardPos = cupLocalPos + (direction * 0.25f) + new Vector3(0, 0, 0.3f);
             
             board.transform.localPosition = boardPos;
             
-            // ROTATION: It needs to face the player (Ball position)
-            // LookAt makes Z point to target, but UI text looks down Z-negative usually.
-            // Simplest VR Text trick: Look at the opposite direction of the player
-            // OR simpler: Just match the Rack's rotation but make it stand up vertically
-            
-            // If Rack is rotated (0, 90, 90), Board should effectively face the ball.
-            // Let's force it to look at the ball spawn point
             Vector3 lookTarget = table.transform.TransformPoint(ballLocalPos);
             board.transform.LookAt(lookTarget);
-            // LookAt often flips UI backwards, if so, rotate 180 on Y:
             board.transform.Rotate(0, 180, 0); 
         }
-    
     }
 
     void SpawnBoundaries(MRUKAnchor table, Vector2 size, bool isWide)
     {
-        // Create a parent for cleanliness
         GameObject boundaryParent = new GameObject("InvisibleBoundaries");
         boundaryParent.transform.SetParent(table.transform, false);
         boundaryParent.transform.localPosition = Vector3.zero;
         boundaryParent.transform.localRotation = Quaternion.identity;
 
-        // We need 3 walls. 
-        // Logic: Player is always at negative axis (-offsetDistance). 
-        // So we need walls at: Positive Axis (Far), Positive Cross-Axis (Side), Negative Cross-Axis (Side).
-
-        if (isWide) // X is the long axis (Player at -X, Enemy at +X)
+        if (isWide)
         {
-            // 1. Far Wall (+X edge)
             CreateOneWall(boundaryParent, new Vector3(size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
-            // 2. Left Wall (+Y edge)
             CreateOneWall(boundaryParent, new Vector3(0, size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
-            // 3. Right Wall (-Y edge)
             CreateOneWall(boundaryParent, new Vector3(0, -size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
         }
-        else // Y is the long axis (Player at -Y, Enemy at +Y)
+        else 
         {
-            // 1. Far Wall (+Y edge)
             CreateOneWall(boundaryParent, new Vector3(0, size.y/2, wallHeight/2), new Vector3(size.x, 0.1f, wallHeight));
-            // 2. Left Wall (+X edge)
             CreateOneWall(boundaryParent, new Vector3(size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
-            // 3. Right Wall (-X edge)
             CreateOneWall(boundaryParent, new Vector3(-size.x/2, 0, wallHeight/2), new Vector3(0.1f, size.y, wallHeight));
         }
     }
@@ -134,15 +133,9 @@ public class BeerPongSetup : MonoBehaviour
         wall.transform.SetParent(parent.transform, false);
         wall.transform.localPosition = localPos;
         wall.transform.localScale = localScale;
-
-        // Make Invisible
         Destroy(wall.GetComponent<MeshRenderer>());
-
-        // Make Trigger
         BoxCollider bc = wall.GetComponent<BoxCollider>();
         bc.isTrigger = true;
-
-        // Add Logic
         wall.AddComponent<BoundaryWall>();
     }
 
